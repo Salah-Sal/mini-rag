@@ -5,7 +5,18 @@ import uuid
 from sqlalchemy.orm import relationship
 
 class Project(SQLAlchemyBase):
+    """SQLAlchemy model representing a project.
 
+    A project acts as a container for related assets (files) and chunks (text segments).
+
+    Attributes:
+        project_id: Primary key, auto-incrementing integer.
+        project_uuid: Unique UUID identifier for the project.
+        created_at: Timestamp when the project was created.
+        updated_at: Timestamp when the project was last updated.
+        chunks: Relationship to associated DataChunk objects.
+        assets: Relationship to associated Asset objects.
+    """
     __tablename__ = "projects"
     
     project_id = Column(Integer, primary_key=True, autoincrement=True)

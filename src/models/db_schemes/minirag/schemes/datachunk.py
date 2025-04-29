@@ -7,6 +7,23 @@ from pydantic import BaseModel
 import uuid
 
 class DataChunk(SQLAlchemyBase):
+    """SQLAlchemy model representing a text chunk derived from an asset.
+
+    Chunks are the primary units of text processed and embedded for RAG.
+
+    Attributes:
+        chunk_id: Primary key, auto-incrementing integer.
+        chunk_uuid: Unique UUID identifier for the chunk.
+        chunk_text: The actual text content of the chunk.
+        chunk_metadata: Optional JSON field for chunk-specific metadata.
+        chunk_order: The sequential order of the chunk within its source asset.
+        chunk_project_id: Foreign key linking to the parent project.
+        chunk_asset_id: Foreign key linking to the source asset.
+        created_at: Timestamp when the chunk was created.
+        updated_at: Timestamp when the chunk was last updated.
+        project: Relationship to the parent Project object.
+        asset: Relationship to the source Asset object.
+    """
 
     __tablename__ = "chunks"
 

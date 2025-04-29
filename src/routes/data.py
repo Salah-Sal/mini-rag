@@ -21,7 +21,42 @@ data_router = APIRouter(
     tags=["api_v1", "data"],
 )
 
-@data_router.post("/upload/{project_id}")
+@data_router.post("/upload/{project_id}",
+                 summary="Upload a file to a project",
+                 description="""
+                 Uploads a file to the specified project.
+                 
+                 This endpoint:
+                 1. Validates the file type and size
+                 2. Generates a unique filename with random prefix
+                 3. Saves the file to the project's directory
+                 4. Records the file as an asset in the database
+                 
+                 Supported file types and size limits are defined in the application settings.
+                 """,
+                 responses={
+                     200: {
+                         "description": "Successfully uploaded file",
+                         "content": {
+                             "application/json": {
+                                 "example": {
+                                     "signal": "file_upload_success",
+                                     "file_id": "123"
+                                 }
+                             }
+                         }
+                     },
+                     400: {
+                         "description": "Upload failed - invalid file or error during upload",
+                         "content": {
+                             "application/json": {
+                                 "example": {
+                                     "signal": "file_type_not_supported"
+                                 }
+                             }
+                         }
+                     }
+                 })
 async def upload_data(request: Request, project_id: int, file: UploadFile,
                       app_settings: Settings = Depends(get_settings)):
         
@@ -89,7 +124,45 @@ async def upload_data(request: Request, project_id: int, file: UploadFile,
             }
         )
 
-@data_router.post("/process/{project_id}")
+@data_router.post("/process/{project_id}",
+                 summary="Process uploaded files into text chunks",
+                 description="""
+                 Processes uploaded files from a project into text chunks for RAG.
+                 
+                 This endpoint:
+                 1. Loads content from uploaded files (all files or a specific file_id)
+                 2. Splits the content into chunks of specified size
+                 3. Stores the chunks in the database with project and asset references
+                 4. Optionally resets existing chunks and vector collection
+                 
+                 The process supports different file types (currently .txt and .pdf) and
+                 uses appropriate loaders for each. Text is split into chunks suitable
+                 for RAG processing and embedding.
+                 """,
+                 responses={
+                     200: {
+                         "description": "Successfully processed files",
+                         "content": {
+                             "application/json": {
+                                 "example": {
+                                     "signal": "processing_success",
+                                     "inserted_chunks": 42,
+                                     "processed_files": 2
+                                 }
+                             }
+                         }
+                     },
+                     400: {
+                         "description": "Processing failed",
+                         "content": {
+                             "application/json": {
+                                 "example": {
+                                     "signal": "processing_failed"
+                                 }
+                             }
+                         }
+                     }
+                 })
 async def process_endpoint(request: Request, project_id: int, process_request: ProcessRequest):
 
     chunk_size = process_request.chunk_size

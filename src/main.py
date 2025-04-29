@@ -16,6 +16,11 @@ app = FastAPI()
 setup_metrics(app)
 
 async def startup_span():
+    """Application startup logic.
+    
+    Initializes database connections, LLM clients, vector DB clients,
+    and the template parser. Attaches them to the application state.
+    """
     settings = get_settings()
 
     postgres_conn = f"postgresql+asyncpg://{settings.POSTGRES_USERNAME}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_MAIN_DATABASE}"
@@ -50,6 +55,10 @@ async def startup_span():
 
 
 async def shutdown_span():
+    """Application shutdown logic.
+    
+    Disposes of the database engine pool and disconnects the vector DB client.
+    """
     app.db_engine.dispose()
     await app.vectordb_client.disconnect()
 

@@ -5,12 +5,37 @@ import logging
 from typing import List, Union
 
 class CoHereProvider(LLMInterface):
+    """LLM provider implementation using the Cohere API.
+    
+    This class implements the LLMInterface for interacting with Cohere models
+    for text generation (e.g., Command R) and text embedding.
+    It handles specific Cohere parameters like input_type for embeddings.
+    
+    Attributes:
+        api_key: Cohere API key.
+        default_input_max_characters: Default max characters for input processing.
+        default_generation_max_output_tokens: Default max tokens for generation output.
+        default_generation_temperature: Default temperature for generation.
+        generation_model_id: ID of the model used for text generation.
+        embedding_model_id: ID of the model used for text embedding.
+        embedding_size: Dimension of the embedding vectors.
+        client: Initialized Cohere client.
+        enums: Enum values specific to the Cohere API (e.g., roles, input types).
+        logger: Standard Python logger instance.
+    """
 
     def __init__(self, api_key: str,
                        default_input_max_characters: int=1000,
                        default_generation_max_output_tokens: int=1000,
                        default_generation_temperature: float=0.1):
+        """Initialize the CoHereProvider.
         
+        Args:
+            api_key: Cohere API key.
+            default_input_max_characters: Default max input length.
+            default_generation_max_output_tokens: Default max output tokens.
+            default_generation_temperature: Default generation temperature.
+        """
         self.api_key = api_key
 
         self.default_input_max_characters = default_input_max_characters
@@ -28,18 +53,21 @@ class CoHereProvider(LLMInterface):
         self.logger = logging.getLogger(__name__)
 
     def set_generation_model(self, model_id: str):
+        """Set the model ID for text generation."""
         self.generation_model_id = model_id
 
     def set_embedding_model(self, model_id: str, embedding_size: int):
+        """Set the model ID and vector size for embedding."""
         self.embedding_model_id = model_id
         self.embedding_size = embedding_size
 
     def process_text(self, text: str):
+        """Truncate input text to the default maximum character limit."""
         return text[:self.default_input_max_characters].strip()
 
     def generate_text(self, prompt: str, chat_history: list=[], max_output_tokens: int=None,
                             temperature: float = None):
-
+        """Generate text using the configured Cohere chat model."""
         if not self.client:
             self.logger.error("CoHere client was not set")
             return None
@@ -66,6 +94,17 @@ class CoHereProvider(LLMInterface):
         return response.text
     
     def embed_text(self, text: Union[str, List[str]], document_type: str = None):
+        """Generate text embeddings using the configured Cohere embedding model.
+        
+        Uses the document_type hint to set Cohere's input_type parameter.
+        
+        Args:
+            text: A single string or a list of strings to embed.
+            document_type: Type hint for the text ('QUERY' or 'DOCUMENT').
+            
+        Returns:
+            A list of embedding vectors (list of lists of floats), or None on error.
+        """
         if not self.client:
             self.logger.error("CoHere client was not set")
             return None
@@ -95,6 +134,7 @@ class CoHereProvider(LLMInterface):
         return [ f for f in response.embeddings.float ]
     
     def construct_prompt(self, prompt: str, role: str):
+        """Construct a prompt message dictionary for the Cohere Chat API format."""
         return {
             "role": role,
             "text": prompt,

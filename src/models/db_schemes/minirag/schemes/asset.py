@@ -6,6 +6,23 @@ from sqlalchemy import Index
 import uuid
 
 class Asset(SQLAlchemyBase):
+    """SQLAlchemy model representing an asset (typically an uploaded file).
+
+    Assets belong to a project and can be associated with multiple text chunks.
+
+    Attributes:
+        asset_id: Primary key, auto-incrementing integer.
+        asset_uuid: Unique UUID identifier for the asset.
+        asset_type: Type of the asset (e.g., 'FILE').
+        asset_name: Unique identifier/name for the asset within the project.
+        asset_size: Size of the asset in bytes.
+        asset_config: Optional JSON field for asset-specific configuration.
+        asset_project_id: Foreign key linking to the parent project.
+        created_at: Timestamp when the asset was created.
+        updated_at: Timestamp when the asset was last updated.
+        project: Relationship to the parent Project object.
+        chunks: Relationship to associated DataChunk objects derived from this asset.
+    """
 
     __tablename__ = "assets"
 

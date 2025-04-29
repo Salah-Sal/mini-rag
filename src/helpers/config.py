@@ -1,7 +1,20 @@
+"""
+Configuration management for the mini-rag application.
+
+This module provides a Settings class and utility functions for loading and
+accessing application configuration from environment variables.
+"""
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
 class Settings(BaseSettings):
+    """
+    Application settings loaded from environment variables.
+    
+    This class defines all configuration parameters used throughout the
+    application, with appropriate types and default values.
+    """
 
     APP_NAME: str
     APP_VERSION: str
@@ -42,7 +55,14 @@ class Settings(BaseSettings):
     DEFAULT_LANG: str = "en"
 
     class Config:
+        """Configuration for the Settings class."""
         env_file = ".env"
 
 def get_settings():
+    """
+    Creates and returns a settings instance.
+    
+    Returns:
+        Settings: A configured instance of the Settings class
+    """
     return Settings()

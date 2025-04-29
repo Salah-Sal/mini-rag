@@ -8,10 +8,33 @@ from sqlalchemy.sql import text as sql_text
 import json
 
 class PGVectorProvider(VectorDBInterface):
+    """Vector database provider implementation using PostgreSQL with pgvector.
+    
+    This class implements the VectorDBInterface using a standard PostgreSQL database
+    with the pgvector extension enabled. It manages vector collections as separate tables
+    and handles embedding storage, indexing, and similarity search via SQL.
+    
+    Attributes:
+        db_client: SQLAlchemy async session maker for database access.
+        default_vector_size: Default dimension for vector embeddings if not specified.
+        distance_method: SQL operator for distance calculation (e.g., '<=>' for cosine).
+        index_threshold: Minimum number of records before creating a vector index.
+        pgvector_table_prefix: Prefix for table names used for vector collections.
+        logger: Standard Python logger instance.
+        default_index_name: Lambda function to generate default index names.
+    """
 
     def __init__(self, db_client, default_vector_size: int = 786,
                        distance_method: str = None, index_threshold: int=100):
+        """Initialize the PGVectorProvider.
         
+        Args:
+            db_client: SQLAlchemy async session maker.
+            default_vector_size: Default dimension for vector embeddings.
+            distance_method: Distance metric to use (e.g., 'COSINE', 'DOT').
+                             Converted to the appropriate SQL operator.
+            index_threshold: Min records needed to trigger automatic index creation.
+        """
         self.db_client = db_client
         self.default_vector_size = default_vector_size
         
@@ -30,6 +53,7 @@ class PGVectorProvider(VectorDBInterface):
 
 
     async def connect(self):
+        """Connect to the database and ensure the pgvector extension is enabled."""
         async with self.db_client() as session:
             async with session.begin():
                 await session.execute(sql_text(
@@ -38,10 +62,11 @@ class PGVectorProvider(VectorDBInterface):
                 await session.commit()
 
     async def disconnect(self):
+        """Disconnect from the database (no-op for SQLAlchemy session management)."""
         pass
 
     async def is_collection_existed(self, collection_name: str) -> bool:
-
+        """Check if a table corresponding to the collection name exists."""
         record = None
         async with self.db_client() as session:
             async with session.begin():
@@ -52,6 +77,7 @@ class PGVectorProvider(VectorDBInterface):
         return record
     
     async def list_all_collections(self) -> List:
+        """List all tables that represent vector collections (based on prefix)."""
         records = []
         async with self.db_client() as session:
             async with session.begin():
@@ -62,6 +88,10 @@ class PGVectorProvider(VectorDBInterface):
         return records
     
     async def get_collection_info(self, collection_name: str) -> dict:
+        """Get information about the table representing a collection.
+        
+        Returns table schema info and the number of records (vectors).
+        """
         async with self.db_client() as session:
             async with session.begin():
                 
@@ -92,6 +122,7 @@ class PGVectorProvider(VectorDBInterface):
                 }
             
     async def delete_collection(self, collection_name: str):
+        """Delete the table corresponding to the collection name."""
         async with self.db_client() as session:
             async with session.begin():
                 self.logger.info(f"Deleting collection: {collection_name}")
@@ -105,7 +136,11 @@ class PGVectorProvider(VectorDBInterface):
     async def create_collection(self, collection_name: str,
                                       embedding_size: int,
                                       do_reset: bool = False):
+        """Create a new table for a vector collection.
         
+        Creates a table with columns for ID, text, vector, metadata, and a foreign key
+        to the original chunk ID. If do_reset is True, deletes the table first.
+        """
         if do_reset:
             _ = await self.delete_collection(collection_name=collection_name)
 
@@ -132,6 +167,7 @@ class PGVectorProvider(VectorDBInterface):
         return False
     
     async def is_index_existed(self, collection_name: str) -> bool:
+        """Check if the default vector index exists for the collection table."""
         index_name = self.default_index_name(collection_name)
         async with self.db_client() as session:
             async with session.begin():
@@ -147,6 +183,11 @@ class PGVectorProvider(VectorDBInterface):
             
     async def create_vector_index(self, collection_name: str,
                                         index_type: str = PgVectorIndexTypeEnums.HNSW.value):
+        """Create a vector index on the collection table if threshold is met.
+        
+        Creates an HNSW or IVFFLAT index on the vector column to speed up similarity search.
+        Only creates the index if the number of records exceeds index_threshold.
+        """
         is_index_existed = await self.is_index_existed(collection_name=collection_name)
         if is_index_existed:
             return False
@@ -174,7 +215,7 @@ class PGVectorProvider(VectorDBInterface):
 
     async def reset_vector_index(self, collection_name: str, 
                                        index_type: str = PgVectorIndexTypeEnums.HNSW.value) -> bool:
-        
+        """Drop and recreate the vector index for a collection."""
         index_name = self.default_index_name(collection_name)
         async with self.db_client() as session:
             async with session.begin():
@@ -187,7 +228,11 @@ class PGVectorProvider(VectorDBInterface):
     async def insert_one(self, collection_name: str, text: str, vector: list,
                             metadata: dict = None,
                             record_id: str = None):
+        """Insert a single text, vector, and metadata into the collection table.
         
+        Requires record_id (chunk_id) for the foreign key constraint.
+        Triggers index creation check after insertion.
+        """
         is_collection_existed = await self.is_collection_existed(collection_name=collection_name)
         if not is_collection_existed:
             self.logger.error(f"Can not insert new record to non-existed collection: {collection_name}")
@@ -221,7 +266,11 @@ class PGVectorProvider(VectorDBInterface):
     async def insert_many(self, collection_name: str, texts: list,
                          vectors: list, metadata: list = None,
                          record_ids: list = None, batch_size: int = 50):
+        """Insert multiple vectors into the collection table in batches.
         
+        Requires record_ids (chunk_ids) for the foreign key constraint.
+        Triggers index creation check after insertion.
+        """
         is_collection_existed = await self.is_collection_existed(collection_name=collection_name)
         if not is_collection_existed:
             self.logger.error(f"Can not insert new records to non-existed collection: {collection_name}")
@@ -268,7 +317,11 @@ class PGVectorProvider(VectorDBInterface):
         return True
     
     async def search_by_vector(self, collection_name: str, vector: list, limit: int):
-
+        """Perform vector similarity search using the configured distance metric.
+        
+        Uses the appropriate SQL operator (e.g., <=>) for search and returns
+        the text and score of the top matching records.
+        """
         is_collection_existed = await self.is_collection_existed(collection_name=collection_name)
         if not is_collection_existed:
             self.logger.error(f"Can not search for records in a non-existed collection: {collection_name}")

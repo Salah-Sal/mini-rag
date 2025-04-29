@@ -164,7 +164,47 @@ async def search_index(request: Request, project_id: int, search_request: Search
         }
     )
 
-@nlp_router.post("/index/answer/{project_id}")
+@nlp_router.post("/index/answer/{project_id}",
+                summary="Generate an answer using RAG",
+                description="""
+                Answers a question using Retrieval-Augmented Generation (RAG).
+                
+                This endpoint:
+                1. Takes a query and project ID
+                2. Retrieves relevant documents from the vector database using semantic search
+                3. Constructs a prompt using the retrieved documents
+                4. Sends the prompt to the LLM to generate a contextually informed answer
+                
+                The quality of the answer depends on the relevant information being present in the
+                indexed documents and the quality of the vector search.
+                
+                A detailed sequence diagram of this flow is available at: `/docs/diagrams/rag_sequence.md`
+                """,
+                responses={
+                    200: {
+                        "description": "Successfully generated answer",
+                        "content": {
+                            "application/json": {
+                                "example": {
+                                    "signal": "rag_answer_success",
+                                    "answer": "This is the generated answer based on the retrieved documents.",
+                                    "full_prompt": "Document content and query formatted as a prompt",
+                                    "chat_history": [{"role": "system", "content": "System instructions"}]
+                                }
+                            }
+                        }
+                    },
+                    400: {
+                        "description": "Failed to generate answer",
+                        "content": {
+                            "application/json": {
+                                "example": {
+                                    "signal": "rag_answer_error"
+                                }
+                            }
+                        }
+                    }
+                })
 async def answer_rag(request: Request, project_id: int, search_request: SearchRequest):
     
     project_model = await ProjectModel.create_instance(
