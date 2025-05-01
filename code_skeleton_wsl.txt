@@ -1,0 +1,375 @@
+# from main import startup_span
+async def startup_span():
+
+# from main import shutdown_span
+async def shutdown_span():
+
+# from controllers.BaseController import BaseController
+class BaseController:
+
+    def __init__(self):
+
+    def generate_random_string(self, length: int=12):
+
+    def get_database_path(self, db_name: str):
+
+# from controllers.DataController import DataController
+class DataController(BaseController):
+
+    def __init__(self):
+
+    def validate_uploaded_file(self, file: UploadFile) -> Tuple[(bool, str)]:
+
+    def generate_unique_filepath(self, orig_file_name: str, project_id: str) -> Tuple[(str, str)]:
+
+    def get_clean_file_name(self, orig_file_name: str) -> str:
+
+# from controllers.NLPController import NLPController
+class NLPController(BaseController):
+
+    def __init__(self, vectordb_client, generation_client, embedding_client, template_parser):
+
+    def create_collection_name(self, project_id: str) -> str:
+
+    async def reset_vector_db_collection(self, project: Project) -> Any:
+
+    async def get_vector_db_collection_info(self, project: Project) -> Dict:
+
+    async def index_into_vector_db(self, project: Project, chunks: List[DataChunk], chunks_ids: List[int], do_reset: bool) -> bool:
+
+    async def search_vector_db_collection(self, project: Project, text: str, limit: int=10):
+
+    async def answer_rag_question(self, project: Project, query: str, limit: int=10) -> Tuple[(Optional[str], Optional[str], Optional[List])]:
+
+# from controllers.ProcessController import Document
+class Document:
+
+# from controllers.ProcessController import ProcessController
+class ProcessController(BaseController):
+
+    def __init__(self, project_id: str):
+
+    def get_file_extension(self, file_id: str) -> str:
+
+    def get_file_loader(self, file_id: str) -> Optional[Union[(TextLoader, PyMuPDFLoader)]]:
+
+    def get_file_content(self, file_id: str) -> Optional[List[Any]]:
+
+    def process_file_content(self, file_content: list, file_id: str, chunk_size: int=100, overlap_size: int=20) -> Optional[List[Document]]:
+
+    def process_simpler_splitter(self, texts: List[str], metadatas: List[dict], chunk_size: int, splitter_tag: str="
+") -> List[Document]:
+
+# from controllers.ProjectController import ProjectController
+class ProjectController(BaseController):
+
+    def __init__(self):
+
+    def get_project_path(self, project_id: str):
+
+# from helpers.config import Settings
+class Settings(BaseSettings):
+
+# from helpers.config import get_settings
+def get_settings():
+
+# from models.AssetModel import AssetModel
+class AssetModel(BaseDataModel):
+
+    def __init__(self, db_client: object):
+
+    async def create_instance(cls, db_client: object):
+
+    async def create_asset(self, asset: Asset):
+
+    async def get_all_project_assets(self, asset_project_id: str, asset_type: str):
+
+    async def get_asset_record(self, asset_project_id: str, asset_name: str):
+
+# from models.BaseDataModel import BaseDataModel
+class BaseDataModel:
+
+    def __init__(self, db_client: object):
+
+# from models.ChunkModel import ChunkModel
+class ChunkModel(BaseDataModel):
+
+    def __init__(self, db_client: Any):
+
+    async def create_instance(cls, db_client: Any) -> ?:
+
+    async def create_chunk(self, chunk: DataChunk) -> DataChunk:
+
+    async def get_chunk(self, chunk_id: str) -> Optional[DataChunk]:
+
+    async def insert_many_chunks(self, chunks: List[DataChunk], batch_size: int=100) -> int:
+
+    async def delete_chunks_by_project_id(self, project_id: Any) -> int:
+
+    async def get_poject_chunks(self, project_id: Any, page_no: int=1, page_size: int=50) -> List[DataChunk]:
+
+    async def get_total_chunks_count(self, project_id: Any) -> int:
+
+# from models.ProjectModel import ProjectModel
+class ProjectModel(BaseDataModel):
+
+    def __init__(self, db_client: object):
+
+    async def create_instance(cls, db_client: object):
+
+    async def create_project(self, project: Project):
+
+    async def get_project_or_create_one(self, project_id: str):
+
+    async def get_all_projects(self, page: int=1, page_size: int=10):
+
+# from models.db_schemes.minirag.alembic.env import run_migrations_offline
+def run_migrations_offline() -> ?:
+
+# from models.db_schemes.minirag.alembic.env import run_migrations_online
+def run_migrations_online() -> ?:
+
+# from models.db_schemes.minirag.alembic.versions.fee4cd54bd38_initial_commit import upgrade
+def upgrade() -> ?:
+
+# from models.db_schemes.minirag.alembic.versions.fee4cd54bd38_initial_commit import downgrade
+def downgrade() -> ?:
+
+# from models.db_schemes.minirag.schemes.asset import Asset
+class Asset(SQLAlchemyBase):
+
+# from models.db_schemes.minirag.schemes.datachunk import DataChunk
+class DataChunk(SQLAlchemyBase):
+
+# from models.db_schemes.minirag.schemes.datachunk import RetrievedDocument
+class RetrievedDocument(BaseModel):
+
+# from models.db_schemes.minirag.schemes.project import Project
+class Project(SQLAlchemyBase):
+
+# from models.enums.AssetTypeEnum import AssetTypeEnum
+class AssetTypeEnum(Enum):
+
+# from models.enums.DataBaseEnum import DataBaseEnum
+class DataBaseEnum(Enum):
+
+# from models.enums.ProcessingEnum import ProcessingEnum
+class ProcessingEnum(Enum):
+
+# from models.enums.ResponseEnums import ResponseSignal
+class ResponseSignal(Enum):
+
+# from routes.base import welcome
+async def welcome(app_settings: Settings=...):
+
+# from routes.data import upload_data
+async def upload_data(request: Request, project_id: int, file: UploadFile, app_settings: Settings=...):
+
+# from routes.data import process_endpoint
+async def process_endpoint(request: Request, project_id: int, process_request: ProcessRequest):
+
+# from routes.nlp import index_project
+async def index_project(request: Request, project_id: int, push_request: PushRequest):
+
+# from routes.nlp import get_project_index_info
+async def get_project_index_info(request: Request, project_id: int):
+
+# from routes.nlp import search_index
+async def search_index(request: Request, project_id: int, search_request: SearchRequest):
+
+# from routes.nlp import answer_rag
+async def answer_rag(request: Request, project_id: int, search_request: SearchRequest):
+
+# from routes.schemes.data import ProcessRequest
+class ProcessRequest(BaseModel):
+
+# from routes.schemes.nlp import PushRequest
+class PushRequest(BaseModel):
+
+# from routes.schemes.nlp import SearchRequest
+class SearchRequest(BaseModel):
+
+# from stores.llm.LLMEnums import LLMEnums
+class LLMEnums(Enum):
+
+# from stores.llm.LLMEnums import OpenAIEnums
+class OpenAIEnums(Enum):
+
+# from stores.llm.LLMEnums import CoHereEnums
+class CoHereEnums(Enum):
+
+# from stores.llm.LLMEnums import DocumentTypeEnum
+class DocumentTypeEnum(Enum):
+
+# from stores.llm.LLMInterface import LLMInterface
+class LLMInterface(ABC):
+
+    def set_generation_model(self, model_id: str):
+
+    def set_embedding_model(self, model_id: str, embedding_size: int):
+
+    def generate_text(self, prompt: str, chat_history: list, max_output_tokens: int, temperature: float):
+
+    def embed_text(self, text: str, document_type: str):
+
+    def construct_prompt(self, prompt: str, role: str):
+
+# from stores.llm.LLMProviderFactory import LLMProviderFactory
+class LLMProviderFactory:
+
+    def __init__(self, config: dict):
+
+    def create(self, provider: str):
+
+# from stores.llm.providers.CoHereProvider import CoHereProvider
+class CoHereProvider(LLMInterface):
+
+    def __init__(self, api_key: str, default_input_max_characters: int=1000, default_generation_max_output_tokens: int=1000, default_generation_temperature: float=0.1):
+
+    def set_generation_model(self, model_id: str):
+
+    def set_embedding_model(self, model_id: str, embedding_size: int):
+
+    def process_text(self, text: str):
+
+    def generate_text(self, prompt: str, chat_history: list, max_output_tokens: int, temperature: float):
+
+    def embed_text(self, text: Union[(str, List[str])], document_type: str):
+
+    def construct_prompt(self, prompt: str, role: str):
+
+# from stores.llm.providers.OpenAIProvider import OpenAIProvider
+class OpenAIProvider(LLMInterface):
+
+    def __init__(self, api_key: str, api_url: str, default_input_max_characters: int=1000, default_generation_max_output_tokens: int=1000, default_generation_temperature: float=0.1):
+
+    def set_generation_model(self, model_id: str):
+
+    def set_embedding_model(self, model_id: str, embedding_size: int):
+
+    def process_text(self, text: str):
+
+    def generate_text(self, prompt: str, chat_history: list, max_output_tokens: int, temperature: float):
+
+    def embed_text(self, text: Union[(str, List[str])], document_type: str):
+
+    def construct_prompt(self, prompt: str, role: str):
+
+# from stores.llm.templates.template_parser import TemplateParser
+class TemplateParser:
+
+    def __init__(self, language: Optional[str], default_language: str="en"):
+
+    def set_language(self, language: Optional[str]) -> ?:
+
+    def get(self, group: str, key: str, vars: Optional[Dict[(str, Any)]]) -> Optional[str]:
+
+# from stores.vectordb.VectorDBEnums import VectorDBEnums
+class VectorDBEnums(Enum):
+
+# from stores.vectordb.VectorDBEnums import DistanceMethodEnums
+class DistanceMethodEnums(Enum):
+
+# from stores.vectordb.VectorDBEnums import PgVectorTableSchemeEnums
+class PgVectorTableSchemeEnums(Enum):
+
+# from stores.vectordb.VectorDBEnums import PgVectorDistanceMethodEnums
+class PgVectorDistanceMethodEnums(Enum):
+
+# from stores.vectordb.VectorDBEnums import PgVectorIndexTypeEnums
+class PgVectorIndexTypeEnums(Enum):
+
+# from stores.vectordb.VectorDBInterface import VectorDBInterface
+class VectorDBInterface(ABC):
+
+    async def connect(self) -> ?:
+
+    async def disconnect(self) -> ?:
+
+    async def is_collection_existed(self, collection_name: str) -> bool:
+
+    async def list_all_collections(self) -> List[str]:
+
+    async def get_collection_info(self, collection_name: str) -> Optional[Dict[(str, Any)]]:
+
+    async def delete_collection(self, collection_name: str) -> bool:
+
+    async def create_collection(self, collection_name: str, embedding_size: int, do_reset: bool) -> bool:
+
+    async def insert_one(self, collection_name: str, text: str, vector: List[float], metadata: Optional[Dict[(str, Any)]], record_id: Optional[str]) -> bool:
+
+    async def insert_many(self, collection_name: str, texts: List[str], vectors: List[List[float]], metadata: Optional[List[Dict]], record_ids: Optional[List[str]], batch_size: int=50) -> bool:
+
+    async def search_by_vector(self, collection_name: str, vector: List[float], limit: int) -> List[RetrievedDocument]:
+
+# from stores.vectordb.VectorDBProviderFactory import VectorDBProviderFactory
+class VectorDBProviderFactory:
+
+    def __init__(self, config: Any, db_client: Optional[sessionmaker]):
+
+    def create(self, provider: str) -> Optional[Union[(QdrantDBProvider, PGVectorProvider)]]:
+
+# from stores.vectordb.providers.PGVectorProvider import PGVectorProvider
+class PGVectorProvider(VectorDBInterface):
+
+    def __init__(self, db_client, default_vector_size: int=786, distance_method: str, index_threshold: int=100):
+
+    async def connect(self):
+
+    async def disconnect(self):
+
+    async def is_collection_existed(self, collection_name: str) -> bool:
+
+    async def list_all_collections(self) -> List:
+
+    async def get_collection_info(self, collection_name: str) -> dict:
+
+    async def delete_collection(self, collection_name: str):
+
+    async def create_collection(self, collection_name: str, embedding_size: int, do_reset: bool):
+
+    async def is_index_existed(self, collection_name: str) -> bool:
+
+    async def create_vector_index(self, collection_name: str, index_type: str=...):
+
+    async def reset_vector_index(self, collection_name: str, index_type: str=...) -> bool:
+
+    async def insert_one(self, collection_name: str, text: str, vector: list, metadata: dict, record_id: str):
+
+    async def insert_many(self, collection_name: str, texts: list, vectors: list, metadata: list, record_ids: list, batch_size: int=50):
+
+    async def search_by_vector(self, collection_name: str, vector: list, limit: int):
+
+# from stores.vectordb.providers.QdrantDBProvider import QdrantDBProvider
+class QdrantDBProvider(VectorDBInterface):
+
+    def __init__(self, db_client: str, default_vector_size: int=786, distance_method: str, index_threshold: int=100):
+
+    async def connect(self):
+
+    async def disconnect(self):
+
+    async def is_collection_existed(self, collection_name: str) -> bool:
+
+    async def list_all_collections(self) -> List:
+
+    def get_collection_info(self, collection_name: str) -> dict:
+
+    async def delete_collection(self, collection_name: str):
+
+    async def create_collection(self, collection_name: str, embedding_size: int, do_reset: bool):
+
+    async def insert_one(self, collection_name: str, text: str, vector: list, metadata: dict, record_id: str):
+
+    async def insert_many(self, collection_name: str, texts: list, vectors: list, metadata: list, record_ids: list, batch_size: int=50):
+
+    async def search_by_vector(self, collection_name: str, vector: list, limit: int=5):
+
+# from utils.metrics import PrometheusMiddleware
+class PrometheusMiddleware(BaseHTTPMiddleware):
+
+    async def dispatch(self, request: Request, call_next):
+
+# from utils.metrics import setup_metrics
+def setup_metrics(app: FastAPI):
+

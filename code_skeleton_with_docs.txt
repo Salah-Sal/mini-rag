@@ -1,0 +1,1175 @@
+# from main import startup_span
+async def startup_span():
+    """Application startup logic.
+
+    Initializes database connections, LLM clients, vector DB clients,
+    and the template parser. Attaches them to the application state."""
+
+# from main import shutdown_span
+async def shutdown_span():
+    """Application shutdown logic.
+
+    Disposes of the database engine pool and disconnects the vector DB client."""
+
+# from controllers.BaseController import BaseController
+class BaseController:
+
+    def __init__(self):
+
+    def generate_random_string(self, length: int=12):
+
+    def get_database_path(self, db_name: str):
+
+# from controllers.DataController import DataController
+class DataController(BaseController):
+    """Controller for handling file data operations.
+
+    This controller manages file validation, path generation, and filename sanitization.
+    It ensures files meet size and type requirements and are stored with unique identifiers.
+
+    Attributes:
+        size_scale: Multiplier to convert MB to bytes for file size validation (1048576)"""
+
+    def __init__(self):
+        "Initialize the DataController with base controller functionality."
+
+    def validate_uploaded_file(self, file: UploadFile) -> Tuple[(bool, str)]:
+        """Validate an uploaded file against configured requirements.
+
+        Checks:
+        - File content type against allowed types
+        - File size against maximum size limit
+
+        Args:
+            file: The FastAPI UploadFile object to validate
+    
+        Returns:
+            A tuple containing:
+            - Boolean indicating if validation passed (True) or failed (False)
+            - ResponseSignal value as string indicating validation result"""
+
+    def generate_unique_filepath(self, orig_file_name: str, project_id: str) -> Tuple[(str, str)]:
+        """Generate a unique filepath for storing an uploaded file.
+
+        Creates a filepath with a random identifier prefix to ensure uniqueness.
+        Continues generating until a non-existent path is found.
+
+        Args:
+            orig_file_name: Original filename from the upload
+            project_id: Project ID to determine the project directory
+    
+        Returns:
+            A tuple containing:
+            - Full file path for storing the file
+            - Unique file ID (random key + cleaned filename) for database reference"""
+
+    def get_clean_file_name(self, orig_file_name: str) -> str:
+        """Sanitize a filename to ensure it's safe for storage.
+
+        Removes special characters and ensures a safe filename format.
+
+        Args:
+            orig_file_name: Original filename to clean
+    
+        Returns:
+            A sanitized filename with special characters removed
+            (except underscores and periods) and spaces replaced with underscores"""
+
+# from controllers.NLPController import NLPController
+class NLPController(BaseController):
+    """Controller for Natural Language Processing operations in the mini-rag system.
+
+    This controller manages vector operations, semantic search, and the Retrieval-Augmented
+    Generation (RAG) pipeline. It serves as the central orchestrator between database stored
+    text chunks, vector embeddings, and LLM generation.
+
+    Key responsibilities:
+    1. Managing vector collections for projects
+    2. Converting text chunks to embeddings and indexing them
+    3. Performing semantic search based on query embeddings
+    4. Orchestrating the RAG workflow (retrieve → augment → generate)
+
+    Attributes:
+        vectordb_client: Client for vector database operations (e.g., PGVector)
+        generation_client: Client for text generation via LLM (e.g., OpenAI)
+        embedding_client: Client for embedding generation (e.g., OpenAI embeddings)
+        template_parser: Parser for loading and substituting prompt templates
+    
+    See Also:
+        A sequence diagram of the RAG workflow is available at `/docs/diagrams/rag_sequence.md`"""
+
+    def __init__(self, vectordb_client, generation_client, embedding_client, template_parser):
+        """Initialize the NLP Controller with required clients.
+
+        Args:
+            vectordb_client: The vector database client (implements VectorDBInterface)
+            generation_client: The LLM client for text generation (implements LLMInterface)
+            embedding_client: The embedding client for vector creation (implements LLMInterface)
+            template_parser: The template parser for prompt management (TemplateParser)"""
+
+    def create_collection_name(self, project_id: str) -> str:
+        """Create a standardized collection name for a project.
+
+        Includes the embedding dimension to ensure vector compatibility.
+
+        Args:
+            project_id: The ID of the project
+    
+        Returns:
+            A formatted collection name string"""
+
+    async def reset_vector_db_collection(self, project: Project) -> Any:
+        """Reset (delete) a project's vector collection.
+
+        Args:
+            project: The project whose vector collection should be reset
+    
+        Returns:
+            The result from the vector database deletion operation"""
+
+    async def get_vector_db_collection_info(self, project: Project) -> Dict:
+        """Get information about a project's vector collection.
+
+        Args:
+            project: The project whose vector collection info is requested
+    
+        Returns:
+            A dictionary containing collection information (e.g., vector count, dimensions)"""
+
+    async def index_into_vector_db(self, project: Project, chunks: List[DataChunk], chunks_ids: List[int], do_reset: bool) -> bool:
+        """Index text chunks into the vector database by converting them to embeddings.
+
+        Args:
+            project: The project these chunks belong to
+            chunks: List of DataChunk objects containing text to be embedded
+            chunks_ids: List of IDs for the chunks (used as record IDs in vector DB)
+            do_reset: Whether to reset the collection before indexing
+    
+        Returns:
+            True if indexing was successful, False otherwise"""
+
+    async def search_vector_db_collection(self, project: Project, text: str, limit: int=10):
+        """Perform semantic search on a project's vector collection.
+
+        Args:
+            project: The project to search in
+            text: The query text to search for
+            limit: Maximum number of results to return
+    
+        Returns:
+            List of RetrievedDocument objects containing matching texts and scores,
+            or False if search failed"""
+
+    async def answer_rag_question(self, project: Project, query: str, limit: int=10) -> Tuple[(Optional[str], Optional[str], Optional[List])]:
+        """Generate an answer to a question using the RAG (Retrieval-Augmented Generation) approach.
+
+        This method implements the core RAG pipeline:
+        1. Retrieval: Perform semantic search to find relevant documents
+        2. Augmentation: Construct a prompt combining the query with retrieved documents
+        3. Generation: Send the augmented prompt to the LLM to generate an answer
+
+        The method uses templates from the template_parser to structure the prompt,
+        ensuring consistent prompting patterns. It follows these steps:
+
+        1. Embed the query and find semantically similar text chunks
+        2. Format each retrieved chunk using the document_prompt template
+        3. Add a system prompt with instructions for the LLM
+        4. Add a footer with the original query using the footer_prompt template
+        5. Send the complete prompt to the LLM for answer generation
+
+        Args:
+            project: The project to search documents in
+            query: The user's question text
+            limit: Maximum number of relevant documents to retrieve (default: 10)
+    
+        Returns:
+            A tuple containing:
+            - answer: The generated answer text, or None if generation failed
+            - full_prompt: The complete prompt sent to the LLM (for debugging/logging)
+            - chat_history: The formatted chat history (including system prompt)
+
+        Note:
+            The quality of results depends on:
+            - The relevance of documents in the vector database
+            - The embedding model's ability to match semantic similarity
+            - The LLM's understanding of the prompt structure
+            - The prompt template design"""
+
+# from controllers.ProcessController import Document
+class Document:
+    """Represents a document or chunk of text with associated metadata.
+
+    Attributes:
+        page_content: The text content of the document/chunk
+        metadata: Associated metadata as a dictionary"""
+
+# from controllers.ProcessController import ProcessController
+class ProcessController(BaseController):
+    """Controller for processing uploaded files into text chunks.
+
+    This controller handles loading file content using appropriate loaders based on
+    file type, and splitting content into chunks of appropriate size for the RAG pipeline.
+
+    Currently supports:
+    - Text (.txt) files
+    - PDF (.pdf) files
+
+    Attributes:
+        project_id: ID of the project being processed
+        project_path: Path to the project directory"""
+
+    def __init__(self, project_id: str):
+        """Initialize the ProcessController with a specific project.
+
+        Args:
+            project_id: The ID of the project whose files will be processed"""
+
+    def get_file_extension(self, file_id: str) -> str:
+        """Extract the file extension from a file ID.
+
+        Args:
+            file_id: The file identifier to extract extension from
+    
+        Returns:
+            The file extension including the dot (e.g., '.txt', '.pdf')"""
+
+    def get_file_loader(self, file_id: str) -> Optional[Union[(TextLoader, PyMuPDFLoader)]]:
+        """Get the appropriate document loader for a file based on its extension.
+
+        Currently supports:
+        - TextLoader for .txt files
+        - PyMuPDFLoader for .pdf files
+
+        Args:
+            file_id: The file identifier to load
+    
+        Returns:
+            An initialized document loader appropriate for the file type,
+            or None if the file doesn't exist or has an unsupported type"""
+
+    def get_file_content(self, file_id: str) -> Optional[List[Any]]:
+        """Load the content of a file using the appropriate loader.
+
+        Args:
+            file_id: The file identifier to load content from
+    
+        Returns:
+            A list of document objects with content and metadata as returned by the loader,
+            or None if no appropriate loader could be found"""
+
+    def process_file_content(self, file_content: list, file_id: str, chunk_size: int=100, overlap_size: int=20) -> Optional[List[Document]]:
+        """Process file content into chunks suitable for the RAG pipeline.
+
+        Extracts text content from loader results and splits it into chunks
+        of appropriate size.
+
+        Args:
+            file_content: Content loaded from a file (as returned by a document loader)
+            file_id: ID of the file being processed (for reference)
+            chunk_size: Target size (in characters) for each chunk (default: 100)
+            overlap_size: Number of characters to overlap between chunks (default: 20)
+                          (Note: Currently not used in the simple splitter implementation)
+    
+        Returns:
+            A list of Document objects representing the chunks, or None if processing failed"""
+
+    def process_simpler_splitter(self, texts: List[str], metadatas: List[dict], chunk_size: int, splitter_tag: str="
+") -> List[Document]:
+        """Split text into chunks using a simple line-based approach.
+
+        Joins all texts into a single document, splits by the specified tag,
+        and then recombines lines into chunks of the target size.
+
+        Args:
+            texts: List of text content to split
+            metadatas: Metadata for each text (currently not used in output)
+            chunk_size: Target size (in characters) for each chunk
+            splitter_tag: Character sequence to split text on (default: newline)
+    
+        Returns:
+            A list of Document objects representing the chunks"""
+
+# from controllers.ProjectController import ProjectController
+class ProjectController(BaseController):
+
+    def __init__(self):
+
+    def get_project_path(self, project_id: str):
+
+# from helpers.config import Settings
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables.
+
+    This class defines all configuration parameters used throughout the
+    application, with appropriate types and default values."""
+
+# from helpers.config import get_settings
+def get_settings():
+    """Creates and returns a settings instance.
+
+    Returns:
+        Settings: A configured instance of the Settings class"""
+
+# from models.AssetModel import AssetModel
+class AssetModel(BaseDataModel):
+    """Data access model for Asset entities.
+
+    Provides methods for interacting with the Asset table, handling creation
+    and retrieval of asset records associated with projects.
+
+    Attributes:
+        db_client: SQLAlchemy async session maker for database access."""
+
+    def __init__(self, db_client: object):
+        """Initialize the AssetModel.
+
+        Args:
+            db_client: SQLAlchemy async session maker."""
+
+    async def create_instance(cls, db_client: object):
+        """Create an instance of AssetModel asynchronously.
+
+        Args:
+            db_client: SQLAlchemy async session maker.
+    
+        Returns:
+            Initialized AssetModel instance."""
+
+    async def create_asset(self, asset: Asset):
+        """Create a single asset record in the database.
+
+        Args:
+            asset: Asset object to insert.
+    
+        Returns:
+            The inserted Asset with updated attributes (e.g., ID)."""
+
+    async def get_all_project_assets(self, asset_project_id: str, asset_type: str):
+        """Retrieve all assets for a specific project and type.
+
+        Args:
+            asset_project_id: ID of the parent project.
+            asset_type: Type of assets to retrieve (e.g., 'FILE').
+    
+        Returns:
+            List of Asset objects matching the criteria."""
+
+    async def get_asset_record(self, asset_project_id: str, asset_name: str):
+        """Retrieve a specific asset by its project ID and name.
+
+        Args:
+            asset_project_id: ID of the parent project.
+            asset_name: Name/identifier of the asset to retrieve.
+    
+        Returns:
+            Asset object if found, None otherwise."""
+
+# from models.BaseDataModel import BaseDataModel
+class BaseDataModel:
+
+    def __init__(self, db_client: object):
+
+# from models.ChunkModel import ChunkModel
+class ChunkModel(BaseDataModel):
+    """Data access model for text chunks.
+
+    This class provides methods to interact with the chunks table in the database,
+    handling CRUD operations and pagination for text chunks.
+
+    Chunks are segments of text extracted from uploaded files, which are
+    embedded and indexed for semantic search in the RAG pipeline.
+
+    Attributes:
+        db_client: SQLAlchemy async session maker for database access"""
+
+    def __init__(self, db_client: Any):
+        """Initialize the ChunkModel.
+
+        Args:
+            db_client: SQLAlchemy async session maker"""
+
+    async def create_instance(cls, db_client: Any) -> ?:
+        """Create an instance of ChunkModel asynchronously.
+
+        This factory method provides a standard way to create model instances.
+
+        Args:
+            db_client: SQLAlchemy async session maker
+    
+        Returns:
+            Initialized ChunkModel instance"""
+
+    async def create_chunk(self, chunk: DataChunk) -> DataChunk:
+        """Create a single chunk record in the database.
+
+        Args:
+            chunk: DataChunk object to insert
+    
+        Returns:
+            The inserted DataChunk with updated attributes (e.g., ID)"""
+
+    async def get_chunk(self, chunk_id: str) -> Optional[DataChunk]:
+        """Retrieve a specific chunk by ID.
+
+        Args:
+            chunk_id: ID of the chunk to retrieve
+    
+        Returns:
+            DataChunk object if found, None otherwise"""
+
+    async def insert_many_chunks(self, chunks: List[DataChunk], batch_size: int=100) -> int:
+        """Insert multiple chunks in batches.
+
+        Efficiently inserts multiple chunks by breaking them into batches
+        to avoid overwhelming the database.
+
+        Args:
+            chunks: List of DataChunk objects to insert
+            batch_size: Number of chunks to insert in each transaction
+    
+        Returns:
+            Number of chunks inserted"""
+
+    async def delete_chunks_by_project_id(self, project_id: Any) -> int:
+        """Delete all chunks associated with a project.
+
+        Args:
+            project_id: ID of the project whose chunks should be deleted
+    
+        Returns:
+            Number of chunks deleted"""
+
+    async def get_poject_chunks(self, project_id: Any, page_no: int=1, page_size: int=50) -> List[DataChunk]:
+        """Retrieve chunks for a project with pagination.
+
+        Args:
+            project_id: ID of the project to retrieve chunks for
+            page_no: Page number (1-indexed)
+            page_size: Number of chunks per page
+    
+        Returns:
+            List of DataChunk objects for the requested page"""
+
+    async def get_total_chunks_count(self, project_id: Any) -> int:
+        """Count the total number of chunks for a project.
+
+        Used for pagination and progress tracking.
+
+        Args:
+            project_id: ID of the project to count chunks for
+    
+        Returns:
+            Total number of chunks in the project"""
+
+# from models.ProjectModel import ProjectModel
+class ProjectModel(BaseDataModel):
+    """Data access model for Project entities.
+
+    Provides methods for interacting with the Project table in the database,
+    handling creation, retrieval, and listing of projects.
+
+    Attributes:
+        db_client: SQLAlchemy async session maker for database access."""
+
+    def __init__(self, db_client: object):
+        """Initialize the ProjectModel.
+
+        Args:
+            db_client: SQLAlchemy async session maker."""
+
+    async def create_instance(cls, db_client: object):
+        """Create an instance of ProjectModel asynchronously.
+
+        Args:
+            db_client: SQLAlchemy async session maker.
+    
+        Returns:
+            Initialized ProjectModel instance."""
+
+    async def create_project(self, project: Project):
+        """Create a single project record in the database.
+
+        Args:
+            project: Project object to insert.
+    
+        Returns:
+            The inserted Project with updated attributes (e.g., ID)."""
+
+    async def get_project_or_create_one(self, project_id: str):
+        """Retrieve a project by ID, creating it if it doesn't exist.
+
+        Args:
+            project_id: The ID of the project to retrieve or create.
+    
+        Returns:
+            The existing or newly created Project object."""
+
+    async def get_all_projects(self, page: int=1, page_size: int=10):
+        """Retrieve all projects with pagination.
+
+        Args:
+            page: Page number (1-indexed).
+            page_size: Number of projects per page.
+    
+        Returns:
+            A tuple containing:
+            - List of Project objects for the requested page.
+            - Total number of pages."""
+
+# from models.db_schemes.minirag.alembic.env import run_migrations_offline
+def run_migrations_offline() -> ?:
+    """Run migrations in 'offline' mode.
+
+    This configures the context with just a URL
+    and not an Engine, though an Engine is acceptable
+    here as well.  By skipping the Engine creation
+    we don't even need a DBAPI to be available.
+
+    Calls to context.execute() here emit the given string to the
+    script output."""
+
+# from models.db_schemes.minirag.alembic.env import run_migrations_online
+def run_migrations_online() -> ?:
+    """Run migrations in 'online' mode.
+
+    In this scenario we need to create an Engine
+    and associate a connection with the context."""
+
+# from models.db_schemes.minirag.alembic.versions.fee4cd54bd38_initial_commit import upgrade
+def upgrade() -> ?:
+
+# from models.db_schemes.minirag.alembic.versions.fee4cd54bd38_initial_commit import downgrade
+def downgrade() -> ?:
+
+# from models.db_schemes.minirag.schemes.asset import Asset
+class Asset(SQLAlchemyBase):
+    """SQLAlchemy model representing an asset (typically an uploaded file).
+
+    Assets belong to a project and can be associated with multiple text chunks.
+
+    Attributes:
+        asset_id: Primary key, auto-incrementing integer.
+        asset_uuid: Unique UUID identifier for the asset.
+        asset_type: Type of the asset (e.g., 'FILE').
+        asset_name: Unique identifier/name for the asset within the project.
+        asset_size: Size of the asset in bytes.
+        asset_config: Optional JSON field for asset-specific configuration.
+        asset_project_id: Foreign key linking to the parent project.
+        created_at: Timestamp when the asset was created.
+        updated_at: Timestamp when the asset was last updated.
+        project: Relationship to the parent Project object.
+        chunks: Relationship to associated DataChunk objects derived from this asset."""
+
+# from models.db_schemes.minirag.schemes.datachunk import DataChunk
+class DataChunk(SQLAlchemyBase):
+    """SQLAlchemy model representing a text chunk derived from an asset.
+
+    Chunks are the primary units of text processed and embedded for RAG.
+
+    Attributes:
+        chunk_id: Primary key, auto-incrementing integer.
+        chunk_uuid: Unique UUID identifier for the chunk.
+        chunk_text: The actual text content of the chunk.
+        chunk_metadata: Optional JSON field for chunk-specific metadata.
+        chunk_order: The sequential order of the chunk within its source asset.
+        chunk_project_id: Foreign key linking to the parent project.
+        chunk_asset_id: Foreign key linking to the source asset.
+        created_at: Timestamp when the chunk was created.
+        updated_at: Timestamp when the chunk was last updated.
+        project: Relationship to the parent Project object.
+        asset: Relationship to the source Asset object."""
+
+# from models.db_schemes.minirag.schemes.datachunk import RetrievedDocument
+class RetrievedDocument(BaseModel):
+
+# from models.db_schemes.minirag.schemes.project import Project
+class Project(SQLAlchemyBase):
+    """SQLAlchemy model representing a project.
+
+    A project acts as a container for related assets (files) and chunks (text segments).
+
+    Attributes:
+        project_id: Primary key, auto-incrementing integer.
+        project_uuid: Unique UUID identifier for the project.
+        created_at: Timestamp when the project was created.
+        updated_at: Timestamp when the project was last updated.
+        chunks: Relationship to associated DataChunk objects.
+        assets: Relationship to associated Asset objects."""
+
+# from models.enums.AssetTypeEnum import AssetTypeEnum
+class AssetTypeEnum(Enum):
+
+# from models.enums.DataBaseEnum import DataBaseEnum
+class DataBaseEnum(Enum):
+
+# from models.enums.ProcessingEnum import ProcessingEnum
+class ProcessingEnum(Enum):
+
+# from models.enums.ResponseEnums import ResponseSignal
+class ResponseSignal(Enum):
+
+# from routes.base import welcome
+async def welcome(app_settings: Settings=...):
+
+# from routes.data import upload_data
+async def upload_data(request: Request, project_id: int, file: UploadFile, app_settings: Settings=...):
+
+# from routes.data import process_endpoint
+async def process_endpoint(request: Request, project_id: int, process_request: ProcessRequest):
+
+# from routes.nlp import index_project
+async def index_project(request: Request, project_id: int, push_request: PushRequest):
+
+# from routes.nlp import get_project_index_info
+async def get_project_index_info(request: Request, project_id: int):
+
+# from routes.nlp import search_index
+async def search_index(request: Request, project_id: int, search_request: SearchRequest):
+
+# from routes.nlp import answer_rag
+async def answer_rag(request: Request, project_id: int, search_request: SearchRequest):
+
+# from routes.schemes.data import ProcessRequest
+class ProcessRequest(BaseModel):
+
+# from routes.schemes.nlp import PushRequest
+class PushRequest(BaseModel):
+
+# from routes.schemes.nlp import SearchRequest
+class SearchRequest(BaseModel):
+
+# from stores.llm.LLMEnums import LLMEnums
+class LLMEnums(Enum):
+
+# from stores.llm.LLMEnums import OpenAIEnums
+class OpenAIEnums(Enum):
+
+# from stores.llm.LLMEnums import CoHereEnums
+class CoHereEnums(Enum):
+
+# from stores.llm.LLMEnums import DocumentTypeEnum
+class DocumentTypeEnum(Enum):
+
+# from stores.llm.LLMInterface import LLMInterface
+class LLMInterface(ABC):
+    """Abstract base class for Large Language Model (LLM) providers.
+
+    This interface defines the required operations for any LLM implementation,
+    providing a consistent API for text generation, embedding, and prompt handling.
+    Providers must implement all abstract methods."""
+
+    def set_generation_model(self, model_id: str):
+        """Set the model identifier to be used for text generation.
+
+        Args:
+            model_id: The specific model ID (e.g., 'gpt-3.5-turbo', 'command-r')."""
+
+    def set_embedding_model(self, model_id: str, embedding_size: int):
+        """Set the model identifier and vector size for text embedding.
+
+        Args:
+            model_id: The specific embedding model ID (e.g., 'text-embedding-ada-002').
+            embedding_size: The dimensionality of the vectors produced by the model."""
+
+    def generate_text(self, prompt: str, chat_history: list, max_output_tokens: int, temperature: float):
+        """Generate text based on a given prompt and optional chat history.
+
+        Args:
+            prompt: The input text prompt for the LLM.
+            chat_history: A list of previous messages (formatted according to provider).
+            max_output_tokens: Maximum number of tokens to generate.
+            temperature: Sampling temperature for generation (controls randomness).
+    
+        Returns:
+            The generated text as a string, or None if generation failed."""
+
+    def embed_text(self, text: str, document_type: str):
+        """Create embedding vectors for given text(s).
+
+        Args:
+            text: A single string or a list of strings to embed.
+            document_type: Optional type hint for the text (e.g., 'query', 'document'),
+                           used by some providers like Cohere.
+                   
+        Returns:
+            A list of embedding vectors (list of lists of floats), or None if embedding failed."""
+
+    def construct_prompt(self, prompt: str, role: str):
+        """Construct a formatted prompt message suitable for the provider's API.
+
+        Args:
+            prompt: The text content of the message.
+            role: The role associated with the message (e.g., 'user', 'system', 'assistant').
+    
+        Returns:
+            A dictionary or object representing the formatted prompt message."""
+
+# from stores.llm.LLMProviderFactory import LLMProviderFactory
+class LLMProviderFactory:
+
+    def __init__(self, config: dict):
+
+    def create(self, provider: str):
+
+# from stores.llm.providers.CoHereProvider import CoHereProvider
+class CoHereProvider(LLMInterface):
+    """LLM provider implementation using the Cohere API.
+
+    This class implements the LLMInterface for interacting with Cohere models
+    for text generation (e.g., Command R) and text embedding.
+    It handles specific Cohere parameters like input_type for embeddings.
+
+    Attributes:
+        api_key: Cohere API key.
+        default_input_max_characters: Default max characters for input processing.
+        default_generation_max_output_tokens: Default max tokens for generation output.
+        default_generation_temperature: Default temperature for generation.
+        generation_model_id: ID of the model used for text generation.
+        embedding_model_id: ID of the model used for text embedding.
+        embedding_size: Dimension of the embedding vectors.
+        client: Initialized Cohere client.
+        enums: Enum values specific to the Cohere API (e.g., roles, input types).
+        logger: Standard Python logger instance."""
+
+    def __init__(self, api_key: str, default_input_max_characters: int=1000, default_generation_max_output_tokens: int=1000, default_generation_temperature: float=0.1):
+        """Initialize the CoHereProvider.
+
+        Args:
+            api_key: Cohere API key.
+            default_input_max_characters: Default max input length.
+            default_generation_max_output_tokens: Default max output tokens.
+            default_generation_temperature: Default generation temperature."""
+
+    def set_generation_model(self, model_id: str):
+        "Set the model ID for text generation."
+
+    def set_embedding_model(self, model_id: str, embedding_size: int):
+        "Set the model ID and vector size for embedding."
+
+    def process_text(self, text: str):
+        "Truncate input text to the default maximum character limit."
+
+    def generate_text(self, prompt: str, chat_history: list, max_output_tokens: int, temperature: float):
+        "Generate text using the configured Cohere chat model."
+
+    def embed_text(self, text: Union[(str, List[str])], document_type: str):
+        """Generate text embeddings using the configured Cohere embedding model.
+
+        Uses the document_type hint to set Cohere's input_type parameter.
+
+        Args:
+            text: A single string or a list of strings to embed.
+            document_type: Type hint for the text ('QUERY' or 'DOCUMENT').
+    
+        Returns:
+            A list of embedding vectors (list of lists of floats), or None on error."""
+
+    def construct_prompt(self, prompt: str, role: str):
+        "Construct a prompt message dictionary for the Cohere Chat API format."
+
+# from stores.llm.providers.OpenAIProvider import OpenAIProvider
+class OpenAIProvider(LLMInterface):
+    """LLM provider implementation using the OpenAI API.
+
+    This class implements the LLMInterface for interacting with OpenAI models
+    for both text generation (e.g., GPT-3.5, GPT-4) and text embedding
+    (e.g., text-embedding-ada-002).
+
+    Attributes:
+        api_key: OpenAI API key.
+        api_url: Optional base URL for OpenAI compatible APIs (e.g., local LLM servers).
+        default_input_max_characters: Default max characters for input processing.
+        default_generation_max_output_tokens: Default max tokens for generation output.
+        default_generation_temperature: Default temperature for generation.
+        generation_model_id: ID of the model used for text generation.
+        embedding_model_id: ID of the model used for text embedding.
+        embedding_size: Dimension of the embedding vectors.
+        client: Initialized OpenAI client.
+        enums: Enum values specific to the OpenAI API (e.g., roles).
+        logger: Standard Python logger instance."""
+
+    def __init__(self, api_key: str, api_url: str, default_input_max_characters: int=1000, default_generation_max_output_tokens: int=1000, default_generation_temperature: float=0.1):
+        """Initialize the OpenAIProvider.
+
+        Args:
+            api_key: OpenAI API key.
+            api_url: Optional base URL for OpenAI compatible APIs.
+            default_input_max_characters: Default max input length.
+            default_generation_max_output_tokens: Default max output tokens.
+            default_generation_temperature: Default generation temperature."""
+
+    def set_generation_model(self, model_id: str):
+        "Set the model ID for text generation."
+
+    def set_embedding_model(self, model_id: str, embedding_size: int):
+        "Set the model ID and vector size for embedding."
+
+    def process_text(self, text: str):
+        "Truncate input text to the default maximum character limit."
+
+    def generate_text(self, prompt: str, chat_history: list, max_output_tokens: int, temperature: float):
+        "Generate text using the configured OpenAI chat completion model."
+
+    def embed_text(self, text: Union[(str, List[str])], document_type: str):
+        """Generate text embeddings using the configured OpenAI embedding model.
+
+        Args:
+            text: A single string or a list of strings to embed.
+            document_type: Not used by OpenAI provider.
+    
+        Returns:
+            A list of embedding vectors (list of lists of floats), or None on error."""
+
+    def construct_prompt(self, prompt: str, role: str):
+        "Construct a prompt message dictionary for the OpenAI Chat API format."
+
+# from stores.llm.templates.template_parser import TemplateParser
+class TemplateParser:
+    """Parser for loading and substituting localized prompt templates.
+
+    This class handles loading templates from language-specific module files,
+    substituting variables, and providing fallback to a default language when
+    a specific template is not available in the requested language.
+
+    Attributes:
+        current_path (str): The absolute path to the template parser directory.
+        default_language (str): The fallback language to use if requested templates 
+            are not available in the primary language.
+        language (str): The currently active language for template loading."""
+
+    def __init__(self, language: Optional[str], default_language: str="en"):
+        """Initialize the template parser with language settings.
+
+        Args:
+            language: The primary language to use for templates. If None or not available,
+                fall back to default_language.
+            default_language: The fallback language to use when templates are not 
+                available in the primary language. Defaults to 'en'."""
+
+    def set_language(self, language: Optional[str]) -> ?:
+        """Set the active language for template loading.
+
+        If the requested language is not available or None, falls back to the default language.
+
+        Args:
+            language: The language code to set as active (e.g., 'en', 'ar').
+                If None or not available, the default language will be used."""
+
+    def get(self, group: str, key: str, vars: Optional[Dict[(str, Any)]]) -> Optional[str]:
+        """Get a template with variable substitution.
+
+        Loads a template from the specified group and key, then substitutes any
+        variables provided. If the template isn't found in the active language,
+        falls back to the default language.
+
+        Args:
+            group: The template group (corresponds to a Python module name, e.g., 'rag').
+            key: The specific template key within the group (e.g., 'system_prompt').
+            vars: A dictionary of variable names and their values to substitute in
+                the template. Defaults to an empty dict if None.
+
+        Returns:
+            The processed template with variables substituted, or None if the
+            template could not be found in either the active or default language."""
+
+# from stores.vectordb.VectorDBEnums import VectorDBEnums
+class VectorDBEnums(Enum):
+
+# from stores.vectordb.VectorDBEnums import DistanceMethodEnums
+class DistanceMethodEnums(Enum):
+
+# from stores.vectordb.VectorDBEnums import PgVectorTableSchemeEnums
+class PgVectorTableSchemeEnums(Enum):
+
+# from stores.vectordb.VectorDBEnums import PgVectorDistanceMethodEnums
+class PgVectorDistanceMethodEnums(Enum):
+
+# from stores.vectordb.VectorDBEnums import PgVectorIndexTypeEnums
+class PgVectorIndexTypeEnums(Enum):
+
+# from stores.vectordb.VectorDBInterface import VectorDBInterface
+class VectorDBInterface(ABC):
+    """Abstract base class for vector database providers.
+
+    This interface defines the required operations for any vector database implementation,
+    providing a consistent API regardless of the underlying technology. Providers must
+    implement all methods to ensure full compatibility with the application.
+
+    Vector databases store high-dimensional vectors (embeddings) and provide efficient
+    similarity search, which is a core component of the RAG pipeline."""
+
+    async def connect(self) -> ?:
+        """Connect to the vector database.
+
+        Establishes a connection to the underlying database/service
+        and performs any necessary setup operations (e.g., creating extensions).
+
+        Should be called during application startup."""
+
+    async def disconnect(self) -> ?:
+        """Disconnect from the vector database.
+
+        Closes connections and performs any necessary cleanup.
+
+        Should be called during application shutdown."""
+
+    async def is_collection_existed(self, collection_name: str) -> bool:
+        """Check if a collection exists in the vector database.
+
+        Args:
+            collection_name: Name of the collection to check
+    
+        Returns:
+            True if the collection exists, False otherwise"""
+
+    async def list_all_collections(self) -> List[str]:
+        """List all collections in the vector database.
+
+        Returns:
+            List of collection names"""
+
+    async def get_collection_info(self, collection_name: str) -> Optional[Dict[(str, Any)]]:
+        """Get information about a specific collection.
+
+        Args:
+            collection_name: Name of the collection
+    
+        Returns:
+            Dictionary with collection metadata (structure depends on provider),
+            or None if the collection doesn't exist"""
+
+    async def delete_collection(self, collection_name: str) -> bool:
+        """Delete a collection from the vector database.
+
+        Args:
+            collection_name: Name of the collection to delete
+    
+        Returns:
+            True if deletion was successful, False otherwise"""
+
+    async def create_collection(self, collection_name: str, embedding_size: int, do_reset: bool) -> bool:
+        """Create a new collection in the vector database.
+
+        Args:
+            collection_name: Name of the collection to create
+            embedding_size: Dimension of the vectors to be stored
+            do_reset: Whether to delete and recreate if the collection already exists
+    
+        Returns:
+            True if collection was created (or already existed), False otherwise"""
+
+    async def insert_one(self, collection_name: str, text: str, vector: List[float], metadata: Optional[Dict[(str, Any)]], record_id: Optional[str]) -> bool:
+        """Insert a single vector into a collection.
+
+        Args:
+            collection_name: Name of the collection
+            text: Original text corresponding to the vector
+            vector: The embedding vector as a list of floats
+            metadata: Optional metadata to store with the vector
+            record_id: Optional identifier to associate with the vector
+    
+        Returns:
+            True if insertion was successful, False otherwise"""
+
+    async def insert_many(self, collection_name: str, texts: List[str], vectors: List[List[float]], metadata: Optional[List[Dict]], record_ids: Optional[List[str]], batch_size: int=50) -> bool:
+        """Insert multiple vectors into a collection in batches.
+
+        Args:
+            collection_name: Name of the collection
+            texts: List of original texts corresponding to the vectors
+            vectors: List of embedding vectors
+            metadata: Optional list of metadata dictionaries
+            record_ids: Optional list of record identifiers
+            batch_size: Number of vectors to insert in each batch
+    
+        Returns:
+            True if all insertions were successful, False otherwise"""
+
+    async def search_by_vector(self, collection_name: str, vector: List[float], limit: int) -> List[RetrievedDocument]:
+        """Search for similar vectors in a collection.
+
+        This is the core operation for semantic search in the RAG pipeline,
+        finding the most similar documents to a query vector.
+
+        Args:
+            collection_name: Name of the collection to search
+            vector: Query vector to search for
+            limit: Maximum number of results to return
+    
+        Returns:
+            List of RetrievedDocument objects containing the text and similarity score,
+            sorted by decreasing similarity (most similar first)"""
+
+# from stores.vectordb.VectorDBProviderFactory import VectorDBProviderFactory
+class VectorDBProviderFactory:
+    """Factory class for vector database providers.
+
+    This class creates the appropriate vector database provider based on configuration.
+    It abstracts the provider instantiation details and ensures consistent initialization.
+
+    Attributes:
+        config: Application configuration containing provider settings
+        base_controller: BaseController instance for utility functions
+        db_client: SQLAlchemy sessionmaker for database access"""
+
+    def __init__(self, config: Any, db_client: Optional[sessionmaker]):
+        """Initialize the vector database provider factory.
+
+        Args:
+            config: Application configuration object containing settings
+                   (e.g., VECTOR_DB_PATH, VECTOR_DB_DISTANCE_METHOD)
+            db_client: SQLAlchemy sessionmaker for PostgreSQL access (for pgvector)"""
+
+    def create(self, provider: str) -> Optional[Union[(QdrantDBProvider, PGVectorProvider)]]:
+        """Create a vector database provider instance.
+
+        Creates the appropriate provider based on the provider name,
+        passing necessary configuration parameters.
+
+        Args:
+            provider: Provider name from VectorDBEnums (e.g., "QDRANT", "PGVECTOR")
+    
+        Returns:
+            Initialized provider instance, or None if the provider is not supported
+    
+        Examples:
+            ```python
+            factory = VectorDBProviderFactory(config, db_client)
+            pgvector = factory.create(VectorDBEnums.PGVECTOR.value)
+            ```"""
+
+# from stores.vectordb.providers.PGVectorProvider import PGVectorProvider
+class PGVectorProvider(VectorDBInterface):
+    """Vector database provider implementation using PostgreSQL with pgvector.
+
+    This class implements the VectorDBInterface using a standard PostgreSQL database
+    with the pgvector extension enabled. It manages vector collections as separate tables
+    and handles embedding storage, indexing, and similarity search via SQL.
+
+    Attributes:
+        db_client: SQLAlchemy async session maker for database access.
+        default_vector_size: Default dimension for vector embeddings if not specified.
+        distance_method: SQL operator for distance calculation (e.g., '<=>' for cosine).
+        index_threshold: Minimum number of records before creating a vector index.
+        pgvector_table_prefix: Prefix for table names used for vector collections.
+        logger: Standard Python logger instance.
+        default_index_name: Lambda function to generate default index names."""
+
+    def __init__(self, db_client, default_vector_size: int=786, distance_method: str, index_threshold: int=100):
+        """Initialize the PGVectorProvider.
+
+        Args:
+            db_client: SQLAlchemy async session maker.
+            default_vector_size: Default dimension for vector embeddings.
+            distance_method: Distance metric to use (e.g., 'COSINE', 'DOT').
+                             Converted to the appropriate SQL operator.
+            index_threshold: Min records needed to trigger automatic index creation."""
+
+    async def connect(self):
+        "Connect to the database and ensure the pgvector extension is enabled."
+
+    async def disconnect(self):
+        "Disconnect from the database (no-op for SQLAlchemy session management)."
+
+    async def is_collection_existed(self, collection_name: str) -> bool:
+        "Check if a table corresponding to the collection name exists."
+
+    async def list_all_collections(self) -> List:
+        "List all tables that represent vector collections (based on prefix)."
+
+    async def get_collection_info(self, collection_name: str) -> dict:
+        """Get information about the table representing a collection.
+
+        Returns table schema info and the number of records (vectors)."""
+
+    async def delete_collection(self, collection_name: str):
+        "Delete the table corresponding to the collection name."
+
+    async def create_collection(self, collection_name: str, embedding_size: int, do_reset: bool):
+        """Create a new table for a vector collection.
+
+        Creates a table with columns for ID, text, vector, metadata, and a foreign key
+        to the original chunk ID. If do_reset is True, deletes the table first."""
+
+    async def is_index_existed(self, collection_name: str) -> bool:
+        "Check if the default vector index exists for the collection table."
+
+    async def create_vector_index(self, collection_name: str, index_type: str=...):
+        """Create a vector index on the collection table if threshold is met.
+
+        Creates an HNSW or IVFFLAT index on the vector column to speed up similarity search.
+        Only creates the index if the number of records exceeds index_threshold."""
+
+    async def reset_vector_index(self, collection_name: str, index_type: str=...) -> bool:
+        "Drop and recreate the vector index for a collection."
+
+    async def insert_one(self, collection_name: str, text: str, vector: list, metadata: dict, record_id: str):
+        """Insert a single text, vector, and metadata into the collection table.
+
+        Requires record_id (chunk_id) for the foreign key constraint.
+        Triggers index creation check after insertion."""
+
+    async def insert_many(self, collection_name: str, texts: list, vectors: list, metadata: list, record_ids: list, batch_size: int=50):
+        """Insert multiple vectors into the collection table in batches.
+
+        Requires record_ids (chunk_ids) for the foreign key constraint.
+        Triggers index creation check after insertion."""
+
+    async def search_by_vector(self, collection_name: str, vector: list, limit: int):
+        """Perform vector similarity search using the configured distance metric.
+
+        Uses the appropriate SQL operator (e.g., <=>) for search and returns
+        the text and score of the top matching records."""
+
+# from stores.vectordb.providers.QdrantDBProvider import QdrantDBProvider
+class QdrantDBProvider(VectorDBInterface):
+
+    def __init__(self, db_client: str, default_vector_size: int=786, distance_method: str, index_threshold: int=100):
+
+    async def connect(self):
+
+    async def disconnect(self):
+
+    async def is_collection_existed(self, collection_name: str) -> bool:
+
+    async def list_all_collections(self) -> List:
+
+    def get_collection_info(self, collection_name: str) -> dict:
+
+    async def delete_collection(self, collection_name: str):
+
+    async def create_collection(self, collection_name: str, embedding_size: int, do_reset: bool):
+
+    async def insert_one(self, collection_name: str, text: str, vector: list, metadata: dict, record_id: str):
+
+    async def insert_many(self, collection_name: str, texts: list, vectors: list, metadata: list, record_ids: list, batch_size: int=50):
+
+    async def search_by_vector(self, collection_name: str, vector: list, limit: int=5):
+
+# from utils.metrics import PrometheusMiddleware
+class PrometheusMiddleware(BaseHTTPMiddleware):
+    """Middleware for capturing HTTP request metrics.
+
+    This middleware measures request duration and counts requests by method,
+    endpoint, and status code for Prometheus monitoring."""
+
+    async def dispatch(self, request: Request, call_next):
+        """Process requests and record metrics.
+
+        Args:
+            request: The incoming HTTP request
+            call_next: The next middleware or route handler
+    
+        Returns:
+            The HTTP response"""
+
+# from utils.metrics import setup_metrics
+def setup_metrics(app: FastAPI):
+    """Setup Prometheus metrics middleware and endpoint.
+
+    This function adds the Prometheus middleware to the FastAPI application
+    and creates a metrics endpoint that can be scraped by Prometheus.
+
+    Args:
+        app: The FastAPI application instance"""
+

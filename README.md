@@ -51,6 +51,38 @@ The main components reside within the `src/` directory:
 
 Significant architectural decisions and their rationale are documented in the `docs/adr/` directory. You can find the [Architecture Decision Records here](./docs/adr/).
 
+## Technology Stack
+
+This project utilizes a comprehensive technology stack:
+
+### Backend
+- **FastAPI**: Python web framework for building APIs
+- **Uvicorn**: ASGI server for running the FastAPI application
+- **SQLAlchemy**: ORM for database interactions
+- **Alembic**: Database migration tool
+
+### Databases
+- **PostgreSQL with pgvector**: Primary database with vector extension for similarity search
+- **Qdrant**: Alternative vector database for storing and querying embeddings
+
+### LLM Providers
+- **OpenAI**: For text generation and embeddings
+- **Cohere**: Alternative LLM provider
+- **Ollama**: Optional local LLM server
+
+### Infrastructure
+- **Docker & Docker Compose**: Containerization and service orchestration
+- **Nginx**: Web server and reverse proxy
+- **Prometheus**: Monitoring and metrics collection
+- **Grafana**: Metrics visualization dashboards
+
+### Processing & Utilities
+- **PyMuPDF**: PDF processing library
+- **NLTK**: Natural Language Toolkit for text processing
+- **Langchain**: Framework for working with LLMs
+
+The system follows a factory pattern design for both LLM and Vector DB providers, allowing easy switching between different implementations.
+
 ## Requirements
 
 - Python 3.10
